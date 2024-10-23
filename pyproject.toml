@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "graphneuralnets"
+version = "0.1.0"
+description = ""
+authors = ["Fady <fnakhla23@gmail.com>"]
+readme = "README.md"
+packages = [{include = "graphneuralnets", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+numpy = "^2.1.2"
+networkx = "^3.4.2"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.10.0"
+mypy = "^1.13.0"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.3.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
