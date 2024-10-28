@@ -1,20 +1,33 @@
-from typing import Literal
-import numpy as np
-from numpy import typing as npt
+import torch
 import pytest
 
-from graphneuralnets.message_passing import graph_matrix
+from graphneuralnets.message_passing import graph_tensor
 
 
-ADJACENCY = np.array(
-    [[0, 1, 0, 0, 0], [1, 0, 1, 0, 0], [0, 1, 0, 1, 1], [0, 0, 1, 0, 0], [0, 0, 1, 0, 0]]
+ADJACENCY = torch.tensor(
+    [
+        [0, 1, 0, 0, 0],
+        [1, 0, 1, 0, 0],
+        [0, 1, 0, 1, 1],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+    ],
+    dtype=torch.int,
 )
-DEGREE_DIAG = np.array([1, 2, 3, 1, 1])
+DEGREE_DIAG = torch.tensor([1, 2, 3, 1, 1], dtype=torch.int)
+FEATS = torch.arange(ADJACENCY.shape[0], dtype=torch.float) + 1
+H_AVG = torch.Tensor([2.0, 2.0, 11/3, 3.0, 3.0])
 
 
-@pytest.mark.parametrize(
-    "adjacency, degree", [(ADJACENCY, DEGREE_DIAG)]
-)
-def test_degree_from_adjacency(adjacency: npt.NDArray, degree: npt.NDArray) -> None:
-    graph = graph_matrix.GraphMatrix[np.uint](adjacency)
-    assert np.array_equal(np.diag(graph.degree_matrix), degree)
+@pytest.mark.parametrize("adjacency, degree", [(ADJACENCY, DEGREE_DIAG)])
+def test_degree_from_adjacency(adjacency: graph_tensor.SquareIntTensor, degree: torch.Tensor) -> None:
+    graph = graph_tensor.GraphTensor(adjacency)
+    assert torch.equal(torch.diag(graph.degree), degree)
+
+
+@pytest.mark.parametrize("adjacency, feats, result", [(ADJACENCY, FEATS, H_AVG)])
+def test_avg_feats(adjacency: graph_tensor.SquareIntTensor, feats: torch.Tensor, result: torch.Tensor) -> None:
+    graph = graph_tensor.GraphTensor(adjacency)
+    calculated_result = graph.left_normalized_adjacency @ feats
+    print(calculated_result)
+    assert torch.all(torch.isclose(calculated_result, result))
