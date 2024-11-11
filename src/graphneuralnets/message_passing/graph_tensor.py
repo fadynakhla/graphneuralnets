@@ -48,7 +48,7 @@ class GraphTensor:
     @property
     def out_degree(self) -> SquareIntTensor:
         if self.backward:
-            return self.to_col_degree(self.adjacencpy)
+            return self.to_col_degree(self.adjacency)
         return self.to_row_degree(self.adjacency)
 
     @property
