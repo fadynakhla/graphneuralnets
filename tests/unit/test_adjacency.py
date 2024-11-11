@@ -1,7 +1,11 @@
 import torch
 import pytest
 
+import loguru
+
 from graphneuralnets.message_passing import graph_tensor
+
+logger = loguru.logger
 
 
 ADJACENCY = torch.tensor(
@@ -9,6 +13,16 @@ ADJACENCY = torch.tensor(
         [0, 1, 0, 0, 0],
         [1, 0, 1, 0, 0],
         [0, 1, 0, 1, 1],
+        [0, 0, 1, 0, 0],
+        [0, 0, 1, 0, 0],
+    ],
+    dtype=torch.int,
+)
+DIRECTED_ADJACENCY = torch.tensor(
+    [
+        [0, 1, 0, 0, 0],
+        [1, 0, 1, 0, 0],
+        [0, 0, 0, 1, 1],
         [0, 0, 1, 0, 0],
         [0, 0, 1, 0, 0],
     ],
@@ -33,14 +47,20 @@ def test_avg_feats(
 ) -> None:
     graph = graph_tensor.GraphTensor(adjacency)
     calculated_result = graph.left_normalized_adjacency @ feats
-    print(calculated_result)
+    logger.info(calculated_result)
     assert torch.all(torch.isclose(calculated_result, result))
 
 
 @pytest.mark.parametrize("adjacency", [ADJACENCY])
-def test_networkx_conversion(
-    adjacency: graph_tensor.SquareIntTensor
-) -> None:
+def test_symmetric_norm(adjacency: graph_tensor.SquareIntTensor) -> None:
+    graph = graph_tensor.GraphTensor(adjacency)
+    sym_norm = graph.normalized_adjacency
+    logger.info(f"Normalized Tensor:\n{sym_norm}")
+    assert torch.equal(sym_norm, sym_norm.transpose(dim0=-2, dim1=-1))
+
+
+@pytest.mark.parametrize("adjacency", [ADJACENCY])
+def test_networkx_conversion(adjacency: graph_tensor.SquareIntTensor) -> None:
     graph = graph_tensor.GraphTensor(adjacency)
     nx_graph = graph.to_networkx_graph()
     new_graph = graph_tensor.GraphTensor.from_networkx_graph(nx_graph)

@@ -13,24 +13,43 @@ class GraphTensor:
 
     Expects an adjacency matrix upon initialization and provides methods
     for calculating several other useful matrices such as the degree
-    matrices, normalized adjacency matrices, etc. Here we use the
-    convention that each row (dim -1) represents the in edges to the
-    node sharing it's index, i.e. A_ij > 0 if there is an edge from node
-    j to node i. This means that the standard matrix multiplication
-    Ax, where A is the adjacency and x is a vector of features, sums the
-    features of the incomming nodes.
+    matrices, normalized adjacency matrices, etc.
+
+    Here we use, by default, the convention that each row (dim -1)
+    represents the out edges from the node sharing it's index, i.e.
+    A_ij > 0 if there is an edge from node i to node j. This means that
+    the standard matrix multiplication Ax, where A is the adjacency and
+    x is a vector of features, sums the features of the outgoing nodes.
     """
 
-    def __init__(self, adjacency: SquareIntTensor) -> None:
+    def __init__(
+        self, adjacency: SquareIntTensor, backward_convention: bool = False
+    ) -> None:
+        """Initialize a new Graph tensor object based on the adjacency
+        matrix.
+
+        Args:
+            adjacency (SquareIntTensor): The adjacecny matrix of the
+              graph.
+            backward_convention (bool, optional): Determines which
+              convention to use for directed edges. False, the default,
+              uses the convention that rows represent out edges. True
+              uses the convention that rows represent incoming edges.
+        """
         self.adjacency = adjacency
+        self.backward = backward_convention
 
     @property
     def in_degree(self) -> SquareIntTensor:
-        return self.to_in_degree(self.adjacency)
+        if self.backward:
+            return self.to_row_degree(self.adjacency)
+        return self.to_col_degree(self.adjacency)
 
     @property
     def out_degree(self) -> SquareIntTensor:
-        return self.to_out_degree(self.adjacency)
+        if self.backward:
+            return self.to_col_degree(self.adjacencpy)
+        return self.to_row_degree(self.adjacency)
 
     @property
     def normalized_adjacency(self) -> SquareFloatTensor:
@@ -53,25 +72,20 @@ class GraphTensor:
         return GraphTensor(symmetric_adjacency)
 
     def to_networkx_graph(self) -> nx.Graph:
-        return nx.from_numpy_array(self.adjacency.numpy())
+        array = self.adjacency.numpy()
+        if self.backward:
+            array = array.transpose((-2, -1))
+        return nx.from_numpy_array(array)
 
     @classmethod
-    def from_networkx_graph(cls, graph: nx.Graph) -> "GraphTensor":
+    def from_networkx_graph(
+        cls, graph: nx.Graph, backward_convention: bool = False
+    ) -> "GraphTensor":
         adjacency = nx.to_numpy_array(graph)
         adjacency_tensor = torch.tensor(adjacency, dtype=torch.int)
-        return cls(adjacency_tensor)
-
-    @classmethod
-    def to_in_degree(cls, adjacency: SquareIntTensor) -> SquareIntTensor:
-        degree_diag = adjacency.sum(dim=-1)
-        degree = torch.diag_embed(degree_diag)
-        return degree
-
-    @classmethod
-    def to_out_degree(cls, adjacency: SquareIntTensor) -> SquareIntTensor:
-        degree_diag = adjacency.sum(dim=-2)
-        degree = torch.diag_embed(degree_diag)
-        return degree
+        if backward_convention:
+            adjacency_tensor = adjacency_tensor.transpose(dim0=-2, dim1=-1)
+        return cls(adjacency_tensor, backward_convention)
 
     @classmethod
     def to_convolution_form(cls, tensor: SquareIntTensor) -> SquareIntTensor:
@@ -89,18 +103,28 @@ class GraphTensor:
         return inv
 
     @classmethod
+    def to_row_degree(cls, adjacency: SquareIntTensor) -> SquareIntTensor:
+        degree_diag = adjacency.sum(dim=-1)
+        return torch.diag_embed(degree_diag)
+
+    @classmethod
+    def to_col_degree(cls, adjacency: SquareIntTensor) -> SquareIntTensor:
+        degree_diag = adjacency.sum(dim=-2)
+        return torch.diag_embed(degree_diag)
+
+    @classmethod
     def normalize(cls, adjacency_tensor: SquareIntTensor) -> SquareFloatTensor:
-        inv_root_in_degree = cls.inverse_root(cls.to_in_degree(adjacency_tensor))
-        inv_root_out_degree = cls.inverse_root(cls.to_out_degree(adjacency_tensor))
+        inv_root_row_degree = cls.inverse_root(cls.to_row_degree(adjacency_tensor))
+        inv_root_col_degree = cls.inverse_root(cls.to_col_degree(adjacency_tensor))
         return (
-            inv_root_in_degree
-            @ adjacency_tensor.type(inv_root_in_degree.dtype)
-            @ inv_root_out_degree
+            inv_root_row_degree
+            @ adjacency_tensor.type(inv_root_row_degree.dtype)
+            @ inv_root_col_degree
         )
 
     @classmethod
     def left_side_normalize(
         cls, adjacency_tensor: SquareIntTensor
     ) -> SquareFloatTensor:
-        inv_degree = cls.invert_pos_diagonal_tensor(cls.to_in_degree(adjacency_tensor))
+        inv_degree = cls.invert_pos_diagonal_tensor(cls.to_row_degree(adjacency_tensor))
         return inv_degree @ adjacency_tensor.type(inv_degree.dtype)
